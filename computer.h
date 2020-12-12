@@ -104,7 +104,7 @@ class Computer {
     struct AddrEvaluator {
     };
 
-    template<auto N>
+    /*template<auto N>
     struct AddrEvaluator<Mem<Num<N>>> {
         static_assert(Num<N>::value >= 0 && Num<N>::value < memory_size, "Error: an incorrect address!");
         constexpr static memory_unit value = Num<N>::value;
@@ -114,7 +114,16 @@ class Computer {
         constexpr static auto val = AddrEvaluator<N>::value;
         static_assert(val >= 0 && val < memory_size, "Error: an incorrect address!");
         constexpr static memory_unit value = val;
+    };*/
+
+    //proba poprawy powyzszego
+    template<typename N>
+    struct AddrEvaluator<Mem<N>> {
+        constexpr static auto val = RValue<N>::value;
+        static_assert(val >= 0 && val < memory_size, "Error: an incorrect address!");
+        constexpr static memory_unit value = val;
     };
+    
 
     template<typename A>
     struct RValue {
