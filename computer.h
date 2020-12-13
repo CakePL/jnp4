@@ -61,6 +61,10 @@ template<typename D, typename S>
 struct Sub : Instruction {
 };
 
+template<typename A, typename B>
+struct Cmp : Instruction {
+};
+
 template<typename D>
 using Inc = Add<D, Num<1>>;
 
@@ -178,12 +182,13 @@ class Computer {
         }
     };
 
-    //TODO Ustawianie flag procesora
     template<typename Arg1, typename Arg2, typename... Rest>
     struct Evaluator<Add<Arg1, Arg2>, Rest...> {
         constexpr static void evaluate(data_t& data) {
             auto addr = AddrEvaluator<Arg1>::value;
             data::mem[addr] += RValue<Arg2>::val(data::mem);
+            data::ZF = data::mem[addr] == 0;
+            data::SF = data::mem[addr] < 0;
             Evaluator<Rest...>::evaluate(data::mem);
         }
     };
@@ -193,6 +198,18 @@ class Computer {
         constexpr static void evaluate(data_t& data) {
             auto addr = AddrEvaluator<Arg1>::value;
             data::mem[addr] -= RValue<Arg2>::val(data);
+            data::ZF = data::mem[addr] == 0;
+            data::SF = data::mem[addr] < 0;
+            Evaluator<Rest...>::evaluate(data);
+        }
+    };
+
+    template<typename Arg1, typename Arg2, typename... Rest>
+    struct Evaluator<Cmp<Arg1, Arg2>, Rest...> {
+        constexpr static void evaluate(data_t& data) {
+            memory_unit result = RValue<Arg1>::val(data) - RValue<Arg2>::val(data);
+            data::ZF = data::mem[result] == 0;
+            data::SF = data::mem[result] < 0;
             Evaluator<Rest...>::evaluate(data);
         }
     };
@@ -202,6 +219,7 @@ class Computer {
         constexpr static void evaluate(data_t& data) {
             auto addr = AddrEvaluator<Arg1>::value;
             data::mem[addr] &= RValue<Arg2>::val(data);
+            data::ZF = data::mem[addr] == 0;
             Evaluator<Rest...>::evaluate(data);
         }
     };
@@ -211,6 +229,7 @@ class Computer {
         constexpr static void evaluate(data_t& data) {
             auto addr = AddrEvaluator<Arg1>::value;
             data::mem[addr] |= RValue<Arg2>::val(data);
+            data::ZF = data::mem[addr] == 0;
             Evaluator<Rest...>::evaluate(data);
         }
     };
@@ -220,6 +239,7 @@ class Computer {
         constexpr static void evaluate(data_t& data) {
             auto addr = AddrEvaluator<Arg>::value;
             data::mem[addr] = ~data::mem[addr];
+            data::ZF = data::mem[addr] == 0;
             Evaluator<Rest...>::evaluate(data);
         }
     };
@@ -234,6 +254,7 @@ class Computer {
 public:
     template<typename P>
     constexpr static auto boot() {
+        //TODO upewnic sie, czy inicjalizacja jest poprawna technicznie
         data_t data = {
             {0}, //mem
             false, //ZF
