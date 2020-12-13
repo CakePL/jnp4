@@ -28,6 +28,10 @@ public:
     [[nodiscard]] constexpr size_t size() const {
         return length;
     }
+
+    constexpr static bool compare(const str_const& a, const str_const& b) {
+        //TODO
+    }
 };
 
 
@@ -65,6 +69,10 @@ template<typename A, typename B>
 struct Cmp : Instruction {
 };
 
+template<typename I>
+struct Lea : Instruction {
+};
+
 template<typename D>
 using Inc = Add<D, Num<1>>;
 
@@ -95,14 +103,16 @@ template<size_t memory_size, typename memory_unit>
 class Computer {
     
     using memory_t = array<memory_unit, memory_size>;
-    using aliases_t = array<str_const, memory_size>;  //do mapowania aliasow na adresy (brute), jeszcze nie uzyte
+    using aliases_t = array<str_const, memory_size>;  //do mapowania aliasow na adresy (brute)
 
-    struct data {
+    using data_t = struct data {
         memory_t mem;
         bool ZF;
         bool SF;
+        aliases_t aliases;
+        std::size_t index;
     };
-    using data_t = struct data;
+    
 
     template<typename P>
     struct ASMProgram;
@@ -161,7 +171,38 @@ class Computer {
         }
     };
 
-    // TODO RValue dla Lea
+    template<>
+    struct RValue<Lea<str_const alias>> {
+        constexpr static memory_unit val(data_t& data) {
+            size_t i = 0;
+            while (i < data::index && !compare(alias, data::mem[i]))
+                ++i;
+            static_assert(i < data::index, "Error: variable not declared!");
+            return (memory_unit)i;
+        };
+    };
+
+    template<typename... Instructions>
+    struct DeclarationEvaluator {
+        constexpr static void evaluate(data_t& data) {}
+    };
+
+    template<typename I, typename... Rest>
+    struct DeclarationEvaluator<I, Rest...> {
+        constexpr static void evaluate(data_t& data) {
+            DeclarationEvaluator<Rest...>::evaluate(data);
+        }
+    };
+
+    template<auto N, typename... Rest>
+    struct DeclarationEvaluator<D<str_const A, Num<N>, Rest...> {
+        constexpr static void evaluate(data_t& data) {
+            static_assert(data::index < memory_size, "Error: not enough memory!");
+            data::aliases[index] = A;
+            ++data::index;
+            Evaluator<Rest...>::evaluate(data);
+        }
+    };
 
     template<typename... Instructions>
     struct Evaluator {
@@ -254,11 +295,13 @@ class Computer {
 public:
     template<typename P>
     constexpr static auto boot() {
-        //TODO upewnic sie, czy inicjalizacja jest poprawna technicznie
+        //TODO upewnic sie, czy inicjalizacja jest poprawna technicznie, ew zmienic jej forme dbajac o robienie tego w compiletime
         data_t data = {
             {0}, //mem
             false, //ZF
-            false //SF
+            false, //SF
+            , //TODO inicjalizacja aliases
+            0
         };
         return ASMProgram<P>::evaluate(data)::mem;
     }
