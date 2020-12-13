@@ -83,20 +83,33 @@ template<typename D>
 struct Not : Instruction {
 };
 
+template<typename I, typename N>
+struct D : Instruction {
+};
+
 template<size_t memory_size, typename memory_unit>
 class Computer {
+    
     using memory_t = array<memory_unit, memory_size>;
+    using aliases_t = array<str_const, memory_size>;  //do mapowania aliasow na adresy (brute), jeszcze nie uzyte
+
+    struct data {
+        memory_t mem;
+        bool ZF;
+        bool SF;
+    };
+    using data_t = struct data;
 
     template<typename P>
     struct ASMProgram;
 
     template<typename... Instructions>
     struct ASMProgram<Program<Instructions...>> {
-        constexpr static auto evaluate(memory_t& mem) {
+        constexpr static auto evaluate(data_t& data) {
             static_assert(((is_base_of<Instruction, Instructions>::value)&& ... && true),
                           "Error: a program should contain instructions only!");
-            Evaluator<Instructions...>::evaluate(mem);
-            return mem;
+            Evaluator<Instructions...>::evaluate(data);
+            return data;
         }
     };
 
@@ -127,96 +140,106 @@ class Computer {
 
     template<typename A>
     struct RValue {
-        constexpr static memory_unit val(memory_t& mem);
+        constexpr static memory_unit val(data_t& data);
     };
 
     template<auto N>
     struct RValue<Num<N>> {
-        constexpr static memory_unit val(memory_t& mem) {
+        constexpr static memory_unit val(data_t& data) {
             return Num<N>::value;
         }
     };
 
     template<typename N>
     struct RValue<Mem<N>> {
-        constexpr static memory_unit val(memory_t& mem) {
-            return mem[AddrEvaluator<Mem<N>>::value];
+        constexpr static memory_unit val(data_t& data) {
+            return data::mem[AddrEvaluator<Mem<N>>::value];
         }
     };
-    // TODO RValue dla Lea
 
+    // TODO RValue dla Lea
 
     template<typename... Instructions>
     struct Evaluator {
-        constexpr static void evaluate(memory_t& mem) {}
+        constexpr static void evaluate(data_t& data) {}
     };
 
     template<typename I, typename... Rest>
     struct Evaluator<I, Rest...> {
-        constexpr static void evaluate(memory_t& mem) {}
+        constexpr static void evaluate(data_t& data) {}
     };
 
     template<typename Arg1, typename Arg2, typename... Rest>
     struct Evaluator<Mov<Arg1, Arg2>, Rest...> {
-        constexpr static void evaluate(memory_t& mem) {
+        constexpr static void evaluate(data_t& data) {
             auto addr = AddrEvaluator<Arg1>::value;
-            mem[addr] = Arg2::value;
-            Evaluator<Rest...>::evaluate(mem);
+            data::mem[addr] = Arg2::value;
+            Evaluator<Rest...>::evaluate(data);
         }
     };
 
     //TODO Ustawianie flag procesora
     template<typename Arg1, typename Arg2, typename... Rest>
     struct Evaluator<Add<Arg1, Arg2>, Rest...> {
-        constexpr static void evaluate(memory_t& mem) {
+        constexpr static void evaluate(data_t& data) {
             auto addr = AddrEvaluator<Arg1>::value;
-            mem[addr] += RValue<Arg2>::val(mem);
-            Evaluator<Rest...>::evaluate(mem);
+            data::mem[addr] += RValue<Arg2>::val(data::mem);
+            Evaluator<Rest...>::evaluate(data::mem);
         }
     };
 
     template<typename Arg1, typename Arg2, typename... Rest>
     struct Evaluator<Sub<Arg1, Arg2>, Rest...> {
-        constexpr static void evaluate(memory_t& mem) {
+        constexpr static void evaluate(data_t& data) {
             auto addr = AddrEvaluator<Arg1>::value;
-            mem[addr] -= RValue<Arg2>::val(mem);
-            Evaluator<Rest...>::evaluate(mem);
+            data::mem[addr] -= RValue<Arg2>::val(data);
+            Evaluator<Rest...>::evaluate(data);
         }
     };
 
     template<typename Arg1, typename Arg2, typename... Rest>
     struct Evaluator<And<Arg1, Arg2>, Rest...> {
-        constexpr static void evaluate(memory_t& mem) {
+        constexpr static void evaluate(data_t& data) {
             auto addr = AddrEvaluator<Arg1>::value;
-            mem[addr] &= RValue<Arg2>::val(mem);
-            Evaluator<Rest...>::evaluate(mem);
+            data::mem[addr] &= RValue<Arg2>::val(data);
+            Evaluator<Rest...>::evaluate(data);
         }
     };
 
     template<typename Arg1, typename Arg2, typename... Rest>
     struct Evaluator<Or<Arg1, Arg2>, Rest...> {
-        constexpr static void evaluate(memory_t& mem) {
+        constexpr static void evaluate(data_t& data) {
             auto addr = AddrEvaluator<Arg1>::value;
-            mem[addr] |= RValue<Arg2>::val(mem);
-            Evaluator<Rest...>::evaluate(mem);
+            data::mem[addr] |= RValue<Arg2>::val(data);
+            Evaluator<Rest...>::evaluate(data);
         }
     };
 
     template<typename Arg, typename... Rest>
     struct Evaluator<Not<Arg>, Rest...> {
-        constexpr static void evaluate(memory_t& mem) {
+        constexpr static void evaluate(data_t& data) {
             auto addr = AddrEvaluator<Arg>::value;
-            mem[addr] = ~mem[addr];
-            Evaluator<Rest...>::evaluate(mem);
+            data::mem[addr] = ~data::mem[addr];
+            Evaluator<Rest...>::evaluate(data);
         }
     };
 
+    template<typename I, typename N, typename... Rest>
+    struct Evaluator<D<I, N>, Rest...> {
+        constexpr static void evaluate(data_t& data) {
+            Evaluator<Rest...>::evaluate(data);
+        }
+    };
 
 public:
     template<typename P>
     constexpr static auto boot() {
-        memory_t memory{0};
-        return ASMProgram<P>::evaluate(memory);
+        data_t data = {
+            {0}, //mem
+            false, //ZF
+            false //SF
+        };
+        return ASMProgram<P>::evaluate(data)::mem;
     }
 };
 
